@@ -1,0 +1,13 @@
+version: "3.9"
+services:
+  step-ca:
+    image: smallstep/step-ca
+    networks:
+      traefik-net:  
+        aliases:
+          - "lubellule.local"
+          ports:
+      - 9000:9000
+    volumes:
+      - /home/wshdock/stepca:/data
+    restart: unless-stopped  
