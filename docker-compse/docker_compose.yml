@@ -1,13 +1,16 @@
-version: "3.9"
+version: "3.5"
+
 services:
   step-ca:
-    image: smallstep/step-ca
+    image: smallstep/step-ca:latest
+    container_name: stepca
+    restart: always
     networks:
-      traefik-net:  
-        aliases:
-          - "lubellule.local"
-          ports:
-      - 9000:9000
+      - traefik-net  
+    ports:
+      - "9000:9000"
     volumes:
-      - /home/wshdock/stepca:/data
-    restart: unless-stopped  
+      - /home/mamad/apps/stepca:/data:z
+networks:
+  traefik-net:
+    external: true
