@@ -1,16 +1,43 @@
-version: "3.5"
+version: "3.8"
 
 services:
-  step-ca:
-    image: smallstep/step-ca:latest
-    container_name: stepca
+  portainer:
+    image: portainer/portainer-ce
+    container_name: portainer
     restart: always
     networks:
-      - traefik-net  
+      - teleport  
     ports:
-      - "9000:9000"
+      - 9000:9000
     volumes:
-      - /home/mamad/apps/stepca:/data:z
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /home/mamad/apps/portainer/:/data
+
+traefik:
+    image: traefik:latest
+    container_name: traefik
+    depends_on: 
+      -step-ca
+    networks:
+      - teleport         
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"
+entryPoints:
+  web:
+    address: ":80"
+
+  web-secure:
+    address: ":443"  
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /home/mamad/apps/traefik:/data
+    labels:
+        - "traefik.enable=true"  
+
+
 networks:
-  traefik-net:
+  teleport:
     external: true
