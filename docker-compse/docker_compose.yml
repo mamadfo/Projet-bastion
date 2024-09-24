@@ -1,44 +1,86 @@
-version: "3.9"
-
 services:
-  portainer:
-    image: portainer/portainer-ce
-    container_name: portainer
+  # DATABASE
+  guaca_db:
+    image: mariadb:10.11
+    container_name: guaca_db
     restart: unless-stopped
-    networks:
-      - teleport  
-    ports:
-      - 9000:9000
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /home/mamad/apps/portainer/:/data
+      - ./db:/var/lib/mysql
+      - ./mariadb/conf.d/port_db.cnf:/etc/mysql/conf.d/my.cnf
+      - ./initdb.sql:/docker-entrypoint-initdb.d/initdb.sql
+    networks:
+      - traefik
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      Timezone: Europe/Paris
+    user: "1002"  
+    expose:
+      - 33020
+       
+#rdp
+  guacd:
+    image: guacamole/guacd:latest
+    container_name: guacd
+    volumes:
+      - /mnt/nfs/guaca_records/:/var/lib/guacamole/recordings:rw
+      - /drive:/drive:rw
+    environment:
+      RECORDING_SEARCH_PATH: /var/lib/guacamole/recordings
+      drive-path: /drive
+    networks:
+      - traefik
+    restart: unless-stopped
+    
 
-traefik:
-    image: traefik:latest
-    container_name: traefik
+#app guacamole    
+  guacamole:
+    image: guacamole/guacamole:latest
+    container_name: guacamole
     restart: unless-stopped
-    depends_on: 
-      -step-ca
-    command:
-      - --entrypoints.web.address=:80
-      - --entrypoints.web.http.redirections.entryPoint.to=websecure
-      - --entrypoints.web.http.redirections.entryPoint.scheme=https
-      - --entrypoints.websecure.address=:443
-    networks:
-      - teleport         
-    ports:
-      - "80:80"
-      - "443:443"
-      - "8080:8080"
-  web-secure:
-    address: ":443"  
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /home/mamad/apps/traefik:/data
-    labels:
-        - "traefik.enable=true"  
+      - ./guacamole:/etc/guacamole
+      - /mnt/nfs/guaca_records/:/var/lib/guacamole/recordings:ro
+    links:
+      - guacd
+    networks:
+      - traefik
+    depends_on:
+      - guaca_db
+      - guacd
+    environment:
+      GUACD_HOSTNAME: guacd
+      MYSQL_HOSTNAME: guaca_db
+      MYSQL_PORT: "33020"
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      GUACAMOLE_HOME: /etc/guacamole
+      RECORDING_SEARCH_PATH: /var/lib/guacamole/recordings
+      drive-path: /drive
+    labels:   
+       - "traefik.enable=true"
+       - "traefik.http.routers.guacamole.entrypoints=http"
+       - "traefik.http.routers.guacamole.rule=Host(`guacamole.it.local`)"
+       - "traefik.http.routers.guacamole.middlewares=default-whitelist@file"
+       - "traefik.http.middlewares.sslheader.headers.customrequestheaders.X-Forwarded-Proto=https"
+       - "traefik.http.middlewares.guacamole-https-redirect.redirectscheme.scheme=https"
+       - "traefik.http.routers.guacamole.middlewares=guacamole-https-redirect"
+       - "traefik.http.routers.guacamole-secure.entrypoints=https"
+       - "traefik.http.routers.guacamole-secure.rule=Host(`guacamole.it.local`)"
+       - "traefik.http.routers.guacamole-secure.tls=true"
+       - "traefik.http.routers.guacamole-secure.service=guacamole"
+       - "traefik.http.routers.guacamole-secure.tls.certresolver=step-ca"
+       - "traefik.http.services.guacamole.loadbalancer.server.port=8080"
+       - "traefik.http.middlewares.guacamole-prefix.addprefix.prefix=/guacamole"
 
 
 networks:
-  teleport:
+  traefik:
     external: true
+
+volumes:
+  db:
