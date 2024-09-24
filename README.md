@@ -1,1 +1,1 @@
-docker with traefik and teleport 
+Docker-compose for Apache Guacamole and Traefik labels
